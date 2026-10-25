@@ -1,0 +1,505 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>sketchtracking</title>
+<style>
+  /* Swiss/typographic style: white ground, black Helvetica, grey hairlines,
+     big bold type, no boxes or rounded corners; circles only for the red
+     "sticker" call to action. */
+  :root {
+    --bg: #fff; --ink: #000; --grey: #767676; --rule: #d8d8d8; --soft: #f1f1f1;
+    --rec: #e3000f; --ok: #29cc99; --bad: #fc4f5f; --warn: #ff7917;
+    --font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    background: var(--bg); color: var(--ink); font: 15px/1.4 var(--font);
+    display: flex; flex-direction: column; -webkit-font-smoothing: antialiased;
+  }
+  button { font: inherit; color: inherit; }
+
+  /* ---- header */
+  header {
+    display: flex; align-items: flex-end; gap: 28px; padding: 18px 32px 14px;
+    border-bottom: 1px solid var(--rule);
+  }
+  .brand { font-weight: 700; font-size: 34px; line-height: .95; letter-spacing: -.5px; }
+  .brand small { display: block; font-size: 11px; font-weight: 400; letter-spacing: 0; margin-top: 7px; }
+  .spacer { flex: 1; }
+  .nav { display: flex; align-items: center; gap: 26px; font-size: 13px; font-weight: 700; padding-bottom: 3px; }
+  .nav .muted { color: var(--grey); font-weight: 700; }
+  .pill { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); flex: none; }
+  .dot.ok { background: var(--ok); }
+  .dot.wait { background: var(--warn); animation: blink 1s infinite; }
+  @keyframes blink { 50% { opacity: .3; } }
+  .src-pill { cursor: pointer; border-bottom: 1px solid var(--ink); padding-bottom: 1px; max-width: 460px; }
+  .src-pill span:not(.chev) { overflow: hidden; text-overflow: ellipsis; }
+  .src-pill:hover { color: var(--grey); border-color: var(--grey); }
+  .chev { font-size: 10px; }
+  .tags { display: inline-flex; gap: 3px; }
+  .tag { min-width: 20px; height: 20px; padding: 0 3px; font-size: 10.5px; display: grid; place-items: center;
+         border: 1px solid var(--rule); color: var(--grey); }
+  .tag.on { background: var(--ink); border-color: var(--ink); color: #fff; }
+
+  /* ---- layout */
+  main {
+    flex: 1; min-height: 0; display: grid; gap: 0 32px; padding: 0 32px;
+    grid-template-columns: minmax(0, 1fr) 380px;
+  }
+  .col { display: flex; flex-direction: column; min-height: 0; }
+  /* the scroll container clips on all sides; the extra left padding (cancelled by
+     the negative margin) leaves room for the record button's hover/pulse growth */
+  .side { overflow-y: auto; padding: 0 0 28px 14px; margin-left: -14px; scrollbar-width: thin; }
+  .side > section { flex: none; }
+  section { border-bottom: 1px solid var(--rule); padding: 18px 0 22px; }
+  section:last-child { border-bottom: 0; }
+  h2 { margin: 0 0 14px; font-size: 22px; font-weight: 700; letter-spacing: -.2px; }
+  .scene { flex: 1; min-height: 0; display: flex; flex-direction: column; padding-bottom: 28px; border: 0; }
+  .stream { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center;
+            background: var(--soft); position: relative; overflow: hidden; }
+  .stream img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; }
+  .paper .stream { height: 300px; flex: none; }
+
+  /* ---- record sticker */
+  .rec-row { display: flex; align-items: center; justify-content: space-between; gap: 22px; }
+  .rec-row .rec-time { text-align: right; }
+  .stickers { display: flex; gap: 10px; flex: none; }
+  .rec-btn {
+    width: 100px; height: 100px; border-radius: 50%; border: 0; background: var(--rec); color: #fff;
+    cursor: pointer; flex: none; font-weight: 700; font-size: 16px; line-height: 1.1;
+    transform: rotate(-8deg); transition: transform .15s, background .15s;
+  }
+  .rec-btn:hover { transform: rotate(-3deg) scale(1.04); }
+  .rec-btn.on { background: var(--ink); color: #fff; animation: pulse 1.6s infinite; }
+  .rec-btn:disabled { opacity: .35; cursor: not-allowed; transform: rotate(-8deg); }
+  .rec-btn.grey { background: var(--grey); }
+  @keyframes pulse { 0%,100% { box-shadow: 0 0 0 0 #0003; } 50% { box-shadow: 0 0 0 12px #0000; } }
+  .timer { font-weight: 700; font-size: 46px; line-height: 1; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+  .sub { color: var(--grey); font-size: 13px; margin-top: 6px; }
+
+  /* ---- form bits */
+  .field + .field { margin-top: 18px; }
+  .label { font-size: 13px; font-weight: 700; margin-bottom: 6px; }
+  .hint { color: var(--grey); font-size: 13px; }
+  .seg { display: flex; gap: 18px; }
+  .seg button {
+    border: 0; background: none; padding: 0; cursor: pointer; color: var(--grey);
+    font-weight: 700; font-size: 28px; letter-spacing: -.5px;
+  }
+  .seg button:hover { color: var(--ink); }
+  .seg button.on { color: var(--ink); }
+  .seg.locked { opacity: .45; pointer-events: none; }
+  .seg.small button { font-size: 20px; }
+  .check { display: flex; align-items: center; gap: 10px; cursor: pointer; user-select: none; font-size: 14px; }
+  .check input { accent-color: var(--ink); width: 16px; height: 16px; margin: 0; }
+  .input {
+    width: 100%; background: transparent; border: 0; border-bottom: 1px solid var(--ink); color: var(--ink);
+    padding: 6px 0; font: 14px var(--font); outline: none; border-radius: 0;
+  }
+  .input:focus { border-bottom-width: 2px; padding-bottom: 5px; }
+  .input::placeholder { color: #b0b0b0; }
+  .row { display: flex; gap: 16px; align-items: flex-end; }
+  .grid2 { display: grid; grid-template-columns: 1fr 80px; gap: 16px; }
+  .link {
+    border: 0; background: none; padding: 6px 0; cursor: pointer; font-weight: 700; font-size: 14px;
+    text-decoration: underline; text-underline-offset: 3px; white-space: nowrap; flex: none;
+  }
+  .link:hover { color: var(--grey); }
+  .link:disabled, .input:disabled { opacity: .4; cursor: not-allowed; }
+  .file-name { color: var(--grey); font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .black-btn {
+    border: 0; background: var(--ink); color: #fff; padding: 11px 20px; cursor: pointer;
+    font-weight: 700; font-size: 14px; border-radius: 0;
+  }
+  .black-btn:hover { background: #333; }
+
+  /* ---- results */
+  .thumbs { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .thumbs a { color: inherit; text-decoration: none; }
+  .thumbs figure { margin: 0; }
+  .thumbs img { width: 100%; display: block; aspect-ratio: 3/4; object-fit: cover; background: var(--soft); }
+  .thumbs figcaption { font-size: 13px; font-weight: 700; padding-top: 6px; }
+  .results video { width: 100%; max-height: 420px; display: block; background: var(--soft); margin-bottom: 10px; }
+  .path { font-size: 12px; color: var(--grey); word-break: break-all; cursor: copy; margin-top: 6px; }
+  .path:hover { color: var(--ink); }
+  .err { color: var(--bad); font-size: 13px; font-weight: 700; margin-bottom: 10px; }
+  .spinner { width: 13px; height: 13px; border: 2px solid var(--rule); border-top-color: var(--ink);
+             border-radius: 50%; animation: spin .8s linear infinite; display: inline-block; vertical-align: -2px; margin-right: 8px; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---- source panel */
+  .pop {
+    position: absolute; top: 72px; right: 32px; width: 440px; z-index: 10; background: #fff;
+    border: 1px solid var(--ink); padding: 22px 24px 24px; box-shadow: 0 16px 40px #0002;
+  }
+  .pop h2 { font-size: 26px; }
+  .pop .seg { margin-bottom: 18px; }
+  .recs { display: flex; flex-direction: column; max-height: 160px; overflow-y: auto; margin-top: 4px; }
+  .recs button {
+    border: 0; border-bottom: 1px solid var(--rule); background: none; text-align: left;
+    padding: 8px 0; cursor: pointer; font-size: 14px;
+  }
+  .recs button:hover { color: var(--grey); }
+  .recs button.on { font-weight: 700; }
+  .recs button.on::before { content: "→ "; }
+  .pop-actions { display: flex; justify-content: space-between; align-items: center; margin-top: 22px; }
+  .center-cta { position: absolute; transform: translateY(56px); }
+
+  .toast {
+    position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%); background: var(--ink); color: #fff;
+    padding: 11px 18px; font-weight: 700; font-size: 14px; opacity: 0; transition: opacity .2s; pointer-events: none;
+  }
+  .toast.show { opacity: 1; }
+  @media (max-width: 960px) {
+    main { grid-template-columns: 1fr; }
+    .stream { min-height: 320px; }
+    .nav { flex-wrap: wrap; gap: 14px; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="brand">sketchtracking<small>Live eye tracking on the drawing sheet</small></div>
+  <div class="spacer"></div>
+  <nav class="nav">
+    <div class="pill src-pill" id="src-pill" title="Choose source"><i class="dot" id="conn-dot"></i><span id="conn-text">connecting…</span><span class="chev">▼</span></div>
+    <div class="pill" title="Corner tags visible in the current frame"><span class="muted">Tags</span> <span class="tags" id="tags"></span></div>
+    <div class="pill"><span id="fps">0 fps</span></div>
+    <div class="pill" id="battery-pill" hidden><span class="muted">Battery</span> <span id="battery"></span></div>
+  </nav>
+</header>
+
+<div class="pop" id="pop" hidden>
+  <h2>Source</h2>
+  <div class="seg small" id="mode">
+    <button data-v="discover">Auto-discover</button><button data-v="ip">Phone IP</button><button data-v="replay">Replay</button>
+  </div>
+
+  <div class="src-tab" data-tab="discover">
+    <div class="hint">Finds the Neon Companion app on this Wi-Fi network automatically. Laptop and phone must be on the same network.</div>
+  </div>
+
+  <div class="src-tab" data-tab="ip" hidden>
+    <div class="field">
+      <div class="label">Companion phone address <span class="hint">(shown in the app under “Stream”)</span></div>
+      <div class="grid2">
+        <input class="input" id="ip-host" placeholder="192.168.1.23" autocomplete="off" spellcheck="false">
+        <input class="input" id="ip-port" value="8080" inputmode="numeric">
+      </div>
+    </div>
+  </div>
+
+  <div class="src-tab" data-tab="replay" hidden>
+    <div class="field">
+      <div class="label">Recording folder <span class="hint">(native Neon export)</span></div>
+      <div class="row">
+        <input class="input" id="rep-path" placeholder="/path/to/recording" spellcheck="false">
+        <button class="link" id="browse">Browse…</button>
+      </div>
+    </div>
+    <div class="field" id="recs-field" hidden>
+      <div class="label">Found nearby</div>
+      <div class="recs" id="recs"></div>
+    </div>
+  </div>
+
+  <div class="pop-actions">
+    <button class="link" id="src-disconnect">Disconnect</button>
+    <button class="black-btn" id="src-connect">Connect</button>
+  </div>
+</div>
+
+<main>
+  <div class="col">
+    <section class="scene">
+      <h2>Scene camera</h2>
+      <div class="stream"><img src="/stream/scene.mjpg" alt="scene">
+        <div class="center-cta" id="scene-cta" hidden><button class="black-btn" id="cta-btn">Choose source…</button></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="col side">
+    <section class="paper">
+      <h2>Paper</h2>
+      <div class="stream"><img src="/stream/paper.mjpg" alt="paper"></div>
+    </section>
+
+    <section>
+      <div class="rec-row">
+        <div class="stickers">
+          <button class="rec-btn" id="rec" title="Start / stop recording"><span id="rec-label">Start<br>recording</span></button>
+          <button class="rec-btn grey" id="capture-btn" title="Use the current scene frame as the final sketch photo (needs at least one corner tag in view)">Capture<br>paper</button>
+        </div>
+        <div class="rec-time">
+          <div class="timer" id="timer">00:00</div>
+          <div class="sub" id="rec-sub">Ready to record</div>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <div class="field">
+        <div class="label">Timelapse speed</div>
+        <div class="seg" id="speed">
+          <button data-v="2">2×</button><button data-v="5" class="on">5×</button>
+          <button data-v="10">10×</button><button data-v="20">20×</button>
+        </div>
+      </div>
+      <div class="field">
+        <label class="check" id="companion-row"><input type="checkbox" id="companion"> Also record on the Companion app</label>
+      </div>
+    </section>
+
+    <section>
+      <div class="field">
+        <div class="label">Final sketch photo <span class="hint">(optional, at least one corner tag visible)</span></div>
+        <div class="row">
+          <span class="file-name" id="sketch-name" style="flex:1">No photo chosen</span>
+          <button class="link" id="sketch-btn">Choose photo…</button>
+        </div>
+        <input type="file" id="sketch" accept="image/*" hidden>
+      </div>
+      <div class="field">
+        <div class="label">Save folder <span class="hint">(a timestamped subfolder per recording)</span></div>
+        <div class="row">
+          <input class="input" id="out-dir" spellcheck="false" title="Press Enter to apply">
+          <button class="link" id="out-browse">Browse…</button>
+        </div>
+      </div>
+      <div class="field"><button class="link" id="clear">Clear live trace</button></div>
+    </section>
+
+    <section id="results-card" hidden>
+      <h2 id="results-title">Last session</h2>
+      <div class="results" id="results"></div>
+    </section>
+  </div>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let speed = 5, state = null, lastOutputsKey = "", capturing = false, resultsView = "photo";
+
+function toast(msg) {
+  const t = $("toast"); t.textContent = msg; t.classList.add("show");
+  clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove("show"), 2600);
+}
+const fmt = (s) => `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(Math.floor(s % 60)).padStart(2, "0")}`;
+
+$("speed").addEventListener("click", (e) => {
+  const b = e.target.closest("button"); if (!b) return;
+  speed = +b.dataset.v;
+  [...$("speed").children].forEach((x) => x.classList.toggle("on", x === b));
+});
+
+$("rec").addEventListener("click", async () => {
+  const recording = state?.session?.state === "recording";
+  const body = recording ? { action: "stop" } : { action: "start", speed, companion: $("companion").checked };
+  const r = await fetch("/api/record", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) toast((await r.json()).error || "failed");
+  poll();
+});
+
+$("clear").addEventListener("click", () => fetch("/api/clear", { method: "POST" }));
+$("sketch-btn").addEventListener("click", () => $("sketch").click());
+$("capture-btn").addEventListener("click", async () => {
+  const b = $("capture-btn"); b.disabled = true; capturing = true; b.innerHTML = "Capturing…";
+  try {
+    const r = await fetch("/api/capture", { method: "POST" });
+    const j = await r.json();
+    if (!r.ok) { toast(j.error || "capture failed"); return; }
+    $("sketch-name").textContent = j.label;
+    toast(state?.session?.state === "done" ? "Re-rendering with captured frame…" : "Frame captured as sketch photo");
+    setTimeout(poll, 1500);
+  } catch { toast("capture failed"); }
+  finally { b.innerHTML = "Capture<br>paper"; capturing = false; b.disabled = !state?.connected; }
+});
+$("sketch").addEventListener("change", async () => {
+  const f = $("sketch").files[0]; if (!f) return;
+  const fd = new FormData(); fd.append("file", f, f.name);
+  $("sketch-name").textContent = f.name;
+  const r = await fetch("/api/sketch", { method: "POST", body: fd });
+  if (!r.ok) toast((await r.json()).error || "upload failed");
+  else toast(state?.session?.state === "done" ? "Re-rendering with sketch photo…" : "Sketch photo attached");
+  $("sketch").value = "";
+  setTimeout(poll, 1500);
+});
+
+// ---- source popover
+let mode = "discover", popOpen = false;
+function setMode(m) {
+  mode = m;
+  [...$("mode").children].forEach((b) => b.classList.toggle("on", b.dataset.v === m));
+  document.querySelectorAll(".src-tab").forEach((t) => (t.hidden = t.dataset.tab !== m));
+  if (m === "replay") loadRecordings();
+}
+function openPop(open = !popOpen) {
+  popOpen = open; $("pop").hidden = !open;
+  if (open && state?.target) {
+    const t = state.target;
+    if (t.mode === "ip") { $("ip-host").value = t.host; $("ip-port").value = t.port; }
+    if (t.mode === "replay") $("rep-path").value = t.path;
+    setMode(t.mode === "none" ? mode : t.mode);
+  }
+}
+$("src-pill").addEventListener("click", (e) => { e.stopPropagation(); openPop(); });
+$("cta-btn").addEventListener("click", (e) => { e.stopPropagation(); openPop(true); });
+document.addEventListener("click", (e) => { if (popOpen && !$("pop").contains(e.target)) openPop(false); });
+document.addEventListener("keydown", (e) => { if (e.key === "Escape") openPop(false); });
+$("mode").addEventListener("click", (e) => { const b = e.target.closest("button"); if (b) setMode(b.dataset.v); });
+
+async function loadRecordings() {
+  const list = await (await fetch("/api/recordings")).json();
+  $("recs-field").hidden = !list.length;
+  $("recs").innerHTML = "";
+  for (const r of list) {
+    const b = document.createElement("button");
+    b.textContent = r.name; b.title = r.path;
+    b.classList.toggle("on", r.path === $("rep-path").value);
+    b.onclick = () => { $("rep-path").value = r.path; [...$("recs").children].forEach((x) => x.classList.toggle("on", x === b)); };
+    $("recs").appendChild(b);
+  }
+}
+$("browse").addEventListener("click", async () => {
+  $("browse").textContent = "Opening…";
+  try {
+    const r = await (await fetch("/api/browse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purpose: "recording" }) })).json();
+    if (r.path) { $("rep-path").value = r.path; if (!r.valid) toast("That folder doesn't look like a Neon recording"); }
+  } finally { $("browse").textContent = "Browse…"; }
+});
+async function setSource(body) {
+  const r = await fetch("/api/source", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+  if (!r.ok) { toast((await r.json()).error || "failed"); return; }
+  openPop(false); poll();
+}
+$("src-connect").addEventListener("click", () => {
+  if (state?.session?.state === "recording" && !confirm("Switching source stops and saves the current recording. Continue?")) return;
+  const body = { mode };
+  if (mode === "ip") Object.assign(body, { host: $("ip-host").value, port: +$("ip-port").value || 8080 });
+  if (mode === "replay") body.path = $("rep-path").value;
+  setSource(body);
+});
+$("src-disconnect").addEventListener("click", () => {
+  if (state?.session?.state === "recording" && !confirm("Disconnecting stops and saves the current recording. Continue?")) return;
+  setSource({ mode: "none" });
+});
+["ip-host", "ip-port", "rep-path"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") $("src-connect").click(); }));
+setMode("discover");
+
+// ---- save folder
+async function setOutDir(path) {
+  const r = await fetch("/api/outdir", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ path }) });
+  const j = await r.json();
+  if (!r.ok) { toast(j.error || "failed"); $("out-dir").value = state?.out_dir || ""; return; }
+  $("out-dir").value = j.out_dir; toast("Saving sessions to " + j.out_dir);
+}
+$("out-dir").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") { e.preventDefault(); $("out-dir").blur(); }
+  if (e.key === "Escape") { $("out-dir").value = state?.out_dir || ""; $("out-dir").blur(); }
+});
+$("out-dir").addEventListener("change", () => setOutDir($("out-dir").value));
+$("out-browse").addEventListener("click", async () => {
+  $("out-browse").textContent = "Opening…";
+  try {
+    const r = await (await fetch("/api/browse", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ purpose: "output" }) })).json();
+    if (r.path) await setOutDir(r.path);
+  } finally { $("out-browse").textContent = "Browse…"; }
+});
+
+$("results").addEventListener("click", (e) => {
+  const b = e.target.closest("#view-seg button"); if (!b) return;
+  resultsView = b.dataset.v; renderResults(state?.session);
+});
+
+function renderTags(st) {
+  $("tags").innerHTML = (st.tag_ids || []).map((id) =>
+    `<span class="tag ${st.tags_seen?.includes(id) ? "on" : ""}">${id}</span>`).join("");
+}
+
+function renderResults(s) {
+  const card = $("results-card");
+  if (!s || s.state === "recording") { card.hidden = true; return; }
+  card.hidden = false;
+  const box = $("results");
+  if (s.state === "processing") {
+    $("results-title").textContent = "Saving session";
+    box.innerHTML = `<div class="hint"><span class="spinner"></span>Rendering timelapse, overlay and heatmap…</div>`;
+    lastOutputsKey = ""; return;
+  }
+  const key = s.name + s.state + s.outputs.join() + (s.sketch || "") + (s.error || "") + resultsView;
+  if (key === lastOutputsKey) return;
+  lastOutputsKey = key;
+  $("results-title").textContent = s.state === "error" ? "Session failed" : "Saved session";
+  const u = (f) => `/sessions/${encodeURIComponent(s.name)}/${f}?v=${Date.now()}`;
+  const has = (f) => s.outputs.includes(f);
+  box.innerHTML = `
+    ${s.error ? `<div class="err">${s.error}</div>` : ""}
+    ${has("trace_fine_clean.png") ? `<div class="seg small" id="view-seg" style="margin-bottom:12px">
+      <button data-v="photo" class="${resultsView === "photo" ? "on" : ""}">On photo</button>
+      <button data-v="clean" class="${resultsView === "clean" ? "on" : ""}">Clean</button></div>` : ""}
+    <div class="thumbs">
+      ${(resultsView === "clean" && has("trace_fine_clean.png")
+          ? [["trace_fine_clean.png", "Gaze path"], ["trace_fixations_clean.png", "Fixations"],
+             ["trace_clusters_clean.png", "Attention clusters"], ["heatmap_clean.png", "Dwell heatmap"]]
+          : [["trace_fine.png", "Gaze path"], ["trace_fixations.png", "Fixations"],
+             ["trace_clusters.png", "Attention clusters"], ["heatmap.png", "Dwell heatmap"]])
+        .filter(([f]) => has(f))
+        .map(([f, label]) => `<a href="${u(f)}" target="_blank"><figure><img src="${u(f)}"><figcaption>${label}</figcaption></figure></a>`).join("")}
+    </div>
+    ${has("timelapse.mp4") ? `<video src="${u("timelapse.mp4")}" controls muted playsinline></video>` : ""}
+    <div class="sub">${s.samples.toLocaleString()} gaze samples, ${fmt(s.elapsed)}, ${s.speed}× timelapse${s.sketch ? ", sketch photo used" : ""}</div>
+    <div class="path" title="Click to copy" onclick="navigator.clipboard.writeText(this.textContent);toast('Path copied')">${s.path}</div>`;
+}
+
+async function poll() {
+  let st;
+  try { st = await (await fetch("/api/status")).json(); } catch { $("conn-text").textContent = "GUI server offline"; $("conn-dot").className = "dot"; return; }
+  state = st;
+  $("conn-dot").className = "dot" + (st.connected ? " ok" : "");
+  $("conn-text").textContent = st.connected ? st.device : (st.message || "disconnected");
+  $("scene-cta").hidden = st.connected || st.target?.mode === "discover" && !/Error/.test(st.message || "");
+  if (!st.connected && st.target?.mode !== "none") $("conn-dot").className = "dot" + (/Error/.test(st.message || "") ? "" : " wait");
+  $("fps").textContent = `${st.fps ?? 0} fps`;
+  $("battery-pill").hidden = st.battery == null;
+  if (st.battery != null) $("battery").textContent = `${st.battery}%`;
+  renderTags(st);
+
+  const s = st.session, recording = s?.state === "recording";
+  $("rec").classList.toggle("on", recording);
+  $("rec-label").innerHTML = recording ? "Stop" : "Start<br>recording";
+  $("rec").disabled = !st.connected || s?.state === "processing";
+  $("speed").classList.toggle("locked", recording);
+  const busy = recording || s?.state === "processing";
+  $("out-dir").disabled = $("out-browse").disabled = busy;
+  const od = $("out-dir");
+  if (document.activeElement !== od && od.value !== (st.out_dir || "")) {
+    od.value = od.title = st.out_dir || "";
+    od.scrollLeft = od.scrollWidth;  // show the end of long paths
+  }
+  $("companion").disabled = recording || !st.can_record_on_companion;
+  $("companion-row").style.opacity = st.can_record_on_companion ? 1 : .45;
+  if (recording) {
+    $("timer").textContent = fmt(s.elapsed);
+    $("rec-sub").textContent = `Recording, ${s.speed}× timelapse, ${s.samples.toLocaleString()} samples`;
+  } else {
+    $("rec-sub").textContent = s?.state === "processing" ? "Saving…" : "Ready to record";
+    $("timer").textContent = s?.state === "done" ? fmt(s.elapsed) : "00:00";
+  }
+  if (s?.sketch) $("sketch-name").textContent = s.sketch;
+  else if (st.pending_sketch) $("sketch-name").textContent = st.pending_sketch;
+  else if (!recording) $("sketch-name").textContent = "No photo chosen";
+  if (!capturing) $("capture-btn").disabled = !st.connected;
+  renderResults(s);
+}
+setInterval(poll, 500);
+poll().then(() => { if (location.hash === "#source") openPop(true); });
+</script>
+</body>
+</html>
